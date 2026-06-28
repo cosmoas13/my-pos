@@ -57,6 +57,25 @@ type CartItem = PosProduct & {
 
 type PaymentMethod = "cash" | "qris";
 
+type ReceiptItem = {
+  productName: string;
+  sku: string | null;
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+};
+
+type Receipt = {
+  invoiceNumber: string;
+  createdAt: string;
+  paymentMethod: PaymentMethod;
+  subtotal: number;
+  totalAmount: number;
+  paidAmount: number;
+  changeAmount: number;
+  items: ReceiptItem[];
+};
+
 const navItems = ["POS", "Produk", "Stok", "Transaksi", "Laporan"];
 
 const iconByCategory = {
@@ -85,6 +104,14 @@ const dateLabel = new Intl.DateTimeFormat("id-ID", {
   year: "numeric",
 }).format(new Date());
 
+const receiptDateFormatter = new Intl.DateTimeFormat("id-ID", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -109,6 +136,7 @@ export function PosScreen({
   const [paidAmount, setPaidAmount] = useState("");
   const [message, setMessage] = useState("");
   const [lastInvoice, setLastInvoice] = useState("");
+  const [lastReceipt, setLastReceipt] = useState<Receipt | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const categoryTabs = useMemo(() => {
@@ -209,13 +237,14 @@ export function PosScreen({
         setCart([]);
         setPaidAmount("");
         setLastInvoice(result.invoiceNumber ?? "");
+        setLastReceipt(result.receipt ?? null);
       }
     });
   }
 
   function handlePrint() {
-    if (!cart.length && !lastInvoice) {
-      setMessage("Belum ada transaksi atau item untuk dicetak.");
+    if (!lastReceipt) {
+      setMessage("Belum ada struk transaksi untuk dicetak.");
       return;
     }
 
@@ -224,7 +253,7 @@ export function PosScreen({
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <div className="flex min-h-screen">
+      <div className="flex min-h-screen print:hidden">
         <aside className="hidden w-64 shrink-0 border-r border-[var(--border)] bg-white/80 px-4 py-5 lg:block print:hidden">
           <div className="mb-8 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--primary)] text-white">
@@ -526,6 +555,45 @@ export function PosScreen({
                 </p>
               )}
 
+              {lastReceipt && (
+                <div className="mt-4 rounded-lg border border-[var(--border)] bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-[var(--muted-foreground)]">
+                        Struk terakhir
+                      </p>
+                      <h3 className="mt-1 font-semibold">
+                        {lastReceipt.invoiceNumber}
+                      </h3>
+                    </div>
+                    <span className="rounded-md bg-[var(--primary-soft)] px-2 py-1 text-xs font-semibold uppercase text-[#3F542E]">
+                      {lastReceipt.paymentMethod}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-2 text-sm">
+                    {lastReceipt.items.map((item) => (
+                      <div
+                        key={`${lastReceipt.invoiceNumber}-${item.productName}-${item.sku}`}
+                        className="flex justify-between gap-3"
+                      >
+                        <span className="min-w-0 truncate">
+                          {item.quantity} x {item.productName}
+                        </span>
+                        <span className="shrink-0 font-medium">
+                          {formatCurrency(item.totalAmount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 border-t border-[var(--border)] pt-3">
+                    <div className="flex justify-between text-sm font-semibold">
+                      <span>Total</span>
+                      <span>{formatCurrency(lastReceipt.totalAmount)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="mt-4 flex gap-3 print:hidden">
                 <Button
                   className="flex-1"
@@ -545,6 +613,69 @@ export function PosScreen({
           </div>
         </section>
       </div>
+
+      {lastReceipt && (
+        <section className="hidden bg-white p-6 text-black print:block">
+          <div className="mx-auto max-w-sm font-mono text-sm">
+            <div className="text-center">
+              <h1 className="text-lg font-bold">My POS</h1>
+              <p>Toko Sembako</p>
+              <p className="mt-2">{lastReceipt.invoiceNumber}</p>
+              <p>
+                {receiptDateFormatter.format(new Date(lastReceipt.createdAt))}
+              </p>
+            </div>
+
+            <div className="my-4 border-t border-dashed border-black" />
+
+            <div className="space-y-3">
+              {lastReceipt.items.map((item) => (
+                <div
+                  key={`print-${lastReceipt.invoiceNumber}-${item.productName}-${item.sku}`}
+                >
+                  <div className="font-semibold">{item.productName}</div>
+                  {item.sku && <div>SKU: {item.sku}</div>}
+                  <div className="flex justify-between">
+                    <span>
+                      {item.quantity} x {formatCurrency(item.unitPrice)}
+                    </span>
+                    <span>{formatCurrency(item.totalAmount)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="my-4 border-t border-dashed border-black" />
+
+            <div className="space-y-1">
+              <div className="flex justify-between">
+                <span>Subtotal</span>
+                <span>{formatCurrency(lastReceipt.subtotal)}</span>
+              </div>
+              <div className="flex justify-between font-bold">
+                <span>Total</span>
+                <span>{formatCurrency(lastReceipt.totalAmount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Metode</span>
+                <span>{lastReceipt.paymentMethod.toUpperCase()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Dibayar</span>
+                <span>{formatCurrency(lastReceipt.paidAmount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Kembalian</span>
+                <span>{formatCurrency(lastReceipt.changeAmount)}</span>
+              </div>
+            </div>
+
+            <div className="my-4 border-t border-dashed border-black" />
+
+            <p className="text-center">Terima kasih</p>
+          </div>
+        </section>
+      )}
     </main>
   );
 }

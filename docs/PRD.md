@@ -70,7 +70,8 @@ Untuk aplikasi POS, shadcn/ui sangat membantu karena tampilannya bersih dan prof
 - Mengatur stok.
 - Mengatur satuan produk, contoh: pcs, kg, liter, dus, pack, karung.
 - Mengatur kategori.
-- Upload atau menyimpan URL gambar produk.
+- Menyimpan URL gambar produk opsional tanpa upload file.
+- Jika URL gambar kosong, produk memakai ikon bawaan berdasarkan kategori.
 
 ### Fitur Stok
 
@@ -181,7 +182,7 @@ Aturan tampilan:
 
 Setiap kartu produk sebaiknya memuat:
 
-- Gambar produk atau ikon fallback.
+- Gambar produk dari URL atau ikon fallback.
 - Nama produk.
 - Harga jual.
 - Satuan.

@@ -20,6 +20,25 @@ type CheckoutInput = {
   items: CheckoutItem[];
 };
 
+type CheckoutReceiptItem = {
+  productName: string;
+  sku: string | null;
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+};
+
+type CheckoutReceipt = {
+  invoiceNumber: string;
+  createdAt: string;
+  paymentMethod: "cash" | "qris";
+  subtotal: number;
+  totalAmount: number;
+  paidAmount: number;
+  changeAmount: number;
+  items: CheckoutReceiptItem[];
+};
+
 function createInvoiceNumber() {
   const now = new Date();
   const date = now.toISOString().slice(0, 10).replaceAll("-", "");
@@ -44,7 +63,7 @@ export async function checkoutSale(input: CheckoutInput) {
     input.paymentMethod === "qris" ? PaymentMethod.QRIS : PaymentMethod.CASH;
 
   try {
-    const sale = await prisma.$transaction(async (tx) => {
+    const receipt = await prisma.$transaction(async (tx) => {
       const cashier = await tx.user.findFirst({
         where: { isActive: true },
         orderBy: { createdAt: "asc" },
@@ -157,15 +176,31 @@ export async function checkoutSale(input: CheckoutInput) {
         });
       }
 
-      return createdSale;
+      return {
+        invoiceNumber: createdSale.invoiceNumber,
+        createdAt: createdSale.createdAt.toISOString(),
+        paymentMethod: input.paymentMethod,
+        subtotal,
+        totalAmount: subtotal,
+        paidAmount,
+        changeAmount: paidAmount - subtotal,
+        items: saleItems.map((item) => ({
+          productName: item.product.name,
+          sku: item.product.sku,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalAmount: item.totalAmount,
+        })),
+      } satisfies CheckoutReceipt;
     });
 
     revalidatePath("/");
 
     return {
       ok: true,
-      message: `Transaksi ${sale.invoiceNumber} berhasil disimpan.`,
-      invoiceNumber: sale.invoiceNumber,
+      message: `Transaksi ${receipt.invoiceNumber} berhasil disimpan.`,
+      invoiceNumber: receipt.invoiceNumber,
+      receipt,
     };
   } catch (error) {
     const message =

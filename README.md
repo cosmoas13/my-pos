@@ -29,7 +29,7 @@ cp .env.example .env
 For local Docker PostgreSQL, use this `DATABASE_URL` in `.env`:
 
 ```env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/my_pos?schema=public"
+DATABASE_URL="postgresql://postgres:terlahir123@localhost:5432/my_pos?schema=public"
 ```
 
 ## Local Database Setup
@@ -52,10 +52,12 @@ cp .env.docker.example .env.docker
 Start PostgreSQL and Adminer with default local settings:
 
 ```bash
-docker compose up -d
+npm run docker:up
 ```
 
-If you do not create `.env.docker`, the compose file uses safe local defaults:
+The `docker:up` script runs `docker compose --env-file .env.docker up -d` so Docker Compose reads the dedicated Docker env file. Docker Compose only auto-loads a file named `.env`; it does not auto-load `.env.docker` unless `--env-file .env.docker` is provided.
+
+If you do not create `.env.docker`, the compose file can still use safe local defaults:
 
 ```txt
 POSTGRES_DB=my_pos
@@ -107,33 +109,42 @@ Adminer login:
 System: PostgreSQL
 Server: postgres
 Username: postgres
-Password: postgres
+Password: terlahir123
 Database: my_pos
 ```
 
 Daily local development flow:
 
 ```bash
-docker compose up -d
+npm run docker:up
 npm run dev
 ```
 
 Stop Docker services:
 
 ```bash
-docker compose down
+npm run docker:down
 ```
 
 Reset local database data:
 
 ```bash
-docker compose down -v
-docker compose up -d
+docker compose --env-file .env.docker down -v
+npm run docker:up
 npm run db:migrate
 npm run db:seed
 ```
 
-If you created `.env.docker` and want Docker Compose to read it explicitly, add `--env-file .env.docker` after `docker compose`.
+First-time setup flow:
+
+```bash
+npm install
+npm run docker:up
+npm run db:generate
+npm run db:migrate
+npm run db:seed
+npm run dev
+```
 
 ## Prisma
 
@@ -176,7 +187,7 @@ Use this to inspect and edit database data from the browser. Prisma Studio is us
 Typical first-time database setup:
 
 ```bash
-docker compose up -d
+npm run docker:up
 npm run db:generate
 npm run db:migrate
 npm run db:seed
@@ -197,16 +208,18 @@ npm run db:studio
 
 ## Scripts
 
-| Command | Function | When to use |
-| --- | --- | --- |
-| `npm run dev` | Starts the Next.js development server. | Use while developing the app locally. |
-| `npm run build` | Builds the app for production. | Use before deployment or before pushing larger changes. |
-| `npm run start` | Starts the production build. | Use after `npm run build` to test production mode locally. |
-| `npm run lint` | Runs ESLint. | Use before commit/push to catch code issues. |
+| Command               | Function                                             | When to use                                                   |
+| --------------------- | ---------------------------------------------------- | ------------------------------------------------------------- |
+| `npm run dev`         | Starts the Next.js development server.               | Use while developing the app locally.                         |
+| `npm run build`       | Builds the app for production.                       | Use before deployment or before pushing larger changes.       |
+| `npm run start`       | Starts the production build.                         | Use after `npm run build` to test production mode locally.    |
+| `npm run lint`        | Runs ESLint.                                         | Use before commit/push to catch code issues.                  |
+| `npm run docker:up`   | Starts PostgreSQL and Adminer with `.env.docker`.    | Use before running Prisma commands or the dev server.         |
+| `npm run docker:down` | Stops PostgreSQL and Adminer.                        | Use when you want to stop local Docker services.              |
 | `npm run db:generate` | Generates Prisma Client into `src/generated/prisma`. | Use after install, schema changes, or pulling schema updates. |
-| `npm run db:migrate` | Creates/applies Prisma migrations to PostgreSQL. | Use when setting up the DB or changing schema. |
-| `npm run db:seed` | Inserts initial local data. | Use after migration or after resetting local DB. |
-| `npm run db:studio` | Opens Prisma Studio in the browser. | Use to inspect/edit database tables visually. |
+| `npm run db:migrate`  | Creates/applies Prisma migrations to PostgreSQL.     | Use when setting up the DB or changing schema.                |
+| `npm run db:seed`     | Inserts initial local data.                          | Use after migration or after resetting local DB.              |
+| `npm run db:studio`   | Opens Prisma Studio in the browser.                  | Use to inspect/edit database tables visually.                 |
 
 Before pushing to GitHub, a good quick check is:
 
