@@ -72,10 +72,11 @@ export function TransactionActions({
         </p>
       )}
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+      <div className="mt-4 grid gap-2">
         <Button
           type="button"
           variant="secondary"
+          className="w-full"
           onClick={saveNotes}
           disabled={isPending}
         >
@@ -85,6 +86,7 @@ export function TransactionActions({
         <Button
           type="button"
           variant="danger"
+          className="w-full"
           onClick={() => changeStatus("VOIDED")}
           disabled={isPending || !canChangeStatus}
         >
@@ -94,6 +96,7 @@ export function TransactionActions({
         <Button
           type="button"
           variant="secondary"
+          className="w-full"
           onClick={() => changeStatus("REFUNDED")}
           disabled={isPending || !canChangeStatus}
         >
