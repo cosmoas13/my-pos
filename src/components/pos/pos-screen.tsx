@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import {
   Banknote,
   BarChart3,
@@ -76,7 +77,13 @@ type Receipt = {
   items: ReceiptItem[];
 };
 
-const navItems = ["POS", "Produk", "Stok", "Transaksi", "Laporan"];
+const navItems = [
+  { label: "POS", href: "/" },
+  { label: "Produk", href: "/" },
+  { label: "Stok", href: "/" },
+  { label: "Transaksi", href: "/transactions" },
+  { label: "Laporan", href: "/" },
+];
 
 const iconByCategory = {
   beras: Wheat,
@@ -267,16 +274,17 @@ export function PosScreen({
 
           <nav className="space-y-1">
             {navItems.map((item) => (
-              <button
-                key={item}
+              <Link
+                key={item.label}
+                href={item.href}
                 className={`flex h-10 w-full items-center rounded-md px-3 text-left text-sm font-medium ${
-                  item === "POS"
+                  item.label === "POS"
                     ? "bg-[var(--primary-soft)] text-[#3F542E]"
                     : "text-[var(--muted-foreground)] hover:bg-[var(--surface-muted)]"
                 }`}
               >
-                {item}
-              </button>
+                {item.label}
+              </Link>
             ))}
           </nav>
 
