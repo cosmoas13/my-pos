@@ -1,18 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  ArrowLeft,
   Banknote,
   Box,
   CalendarClock,
   CreditCard,
+  FileText,
   QrCode,
   ReceiptText,
   UserRound,
 } from "lucide-react";
 
+import { AppShell } from "@/components/layout/app-shell";
 import { SaleReceipt } from "@/components/receipt/sale-receipt";
 import { PrintButton } from "@/components/transactions/print-button";
+import { TransactionActions } from "@/components/transactions/transaction-actions";
 import { SaleStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
@@ -59,6 +61,7 @@ export default async function TransactionDetailPage({
       items: {
         orderBy: { createdAt: "asc" },
       },
+      receiptPrints: true,
     },
   });
 
@@ -89,19 +92,17 @@ export default async function TransactionDetailPage({
       (Number(item.unitPrice) - Number(item.costPrice)) * Number(item.quantity),
     0
   );
+  const printCount = transaction.receiptPrints.reduce(
+    (total, receiptPrint) => total + receiptPrint.printCount,
+    0
+  );
 
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)] print:bg-white">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 md:px-6 print:hidden">
-        <header className="flex flex-col gap-4 border-b border-[var(--border)] pb-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <Link
-              href="/transactions"
-              className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-            >
-              <ArrowLeft size={16} />
-              Kembali ke riwayat
-            </Link>
+    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)] print:min-h-0 print:bg-white">
+      <div className="print:hidden">
+        <AppShell active="Transaksi">
+        <div className="flex w-full flex-col gap-6 px-4 py-6 md:px-6 print:hidden">
+          <header className="flex flex-col gap-4 border-b border-[var(--border)] pb-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[var(--primary)] text-white">
                 <ReceiptText size={21} />
@@ -115,12 +116,19 @@ export default async function TransactionDetailPage({
                 </h1>
               </div>
             </div>
-          </div>
 
-          <PrintButton />
-        </header>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Link
+                href="/transactions"
+                className="inline-flex h-10 items-center justify-center rounded-md border border-[var(--border)] bg-white px-4 text-sm font-medium hover:bg-[var(--surface-muted)]"
+              >
+                Kembali ke riwayat
+              </Link>
+              <PrintButton saleId={transaction.id} />
+            </div>
+          </header>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-lg border border-[var(--border)] bg-white p-4">
             <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
               <CalendarClock size={16} />
@@ -136,6 +144,15 @@ export default async function TransactionDetailPage({
               Kasir
             </div>
             <p className="mt-2 font-semibold">{transaction.cashier.name}</p>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-white p-4">
+            <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+              <UserRound size={16} />
+              Customer
+            </div>
+            <p className="mt-2 font-semibold">
+              {transaction.customer?.name ?? "-"}
+            </p>
           </div>
           <div className="rounded-lg border border-[var(--border)] bg-white p-4">
             <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
@@ -203,6 +220,12 @@ export default async function TransactionDetailPage({
           </div>
 
           <aside className="space-y-4">
+            <TransactionActions
+              saleId={transaction.id}
+              status={transaction.status}
+              initialNotes={transaction.notes ?? ""}
+            />
+
             <div className="rounded-lg border border-[var(--border)] bg-white p-4">
               <div className="flex items-center gap-2 font-semibold">
                 <CreditCard size={17} />
@@ -244,6 +267,29 @@ export default async function TransactionDetailPage({
               </div>
             </div>
 
+            <div className="rounded-lg border border-[var(--border)] bg-white p-4">
+              <div className="flex items-center gap-2 font-semibold">
+                <FileText size={17} />
+                Audit struk
+              </div>
+              <div className="mt-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-[var(--muted-foreground)]">
+                    Total print
+                  </span>
+                  <span className="font-semibold">{printCount}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--muted-foreground)]">
+                    Catatan
+                  </span>
+                  <span className="max-w-44 truncate text-right">
+                    {transaction.notes ?? "-"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4">
               <p className="text-sm text-[var(--muted-foreground)]">
                 Estimasi laba kotor
@@ -258,6 +304,8 @@ export default async function TransactionDetailPage({
             </div>
           </aside>
         </section>
+        </div>
+        </AppShell>
       </div>
 
       <div className="hidden print:block">

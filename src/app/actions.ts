@@ -17,6 +17,8 @@ type CheckoutItem = {
 type CheckoutInput = {
   paymentMethod: "cash" | "qris";
   paidAmount: number;
+  customerName?: string;
+  notes?: string;
   items: CheckoutItem[];
 };
 
@@ -29,6 +31,7 @@ type CheckoutReceiptItem = {
 };
 
 type CheckoutReceipt = {
+  saleId: string;
   invoiceNumber: string;
   createdAt: string;
   paymentMethod: "cash" | "qris";
@@ -43,6 +46,11 @@ function createInvoiceNumber() {
   const now = new Date();
   const date = now.toISOString().slice(0, 10).replaceAll("-", "");
   return `INV-${date}-${now.getTime().toString().slice(-6)}`;
+}
+
+function cleanOptionalText(value?: string) {
+  const cleaned = value?.trim();
+  return cleaned ? cleaned : null;
 }
 
 export async function checkoutSale(input: CheckoutInput) {
@@ -124,16 +132,27 @@ export async function checkoutSale(input: CheckoutInput) {
         throw new Error("Uang diterima kurang dari total pembayaran.");
       }
 
+      const customerName = cleanOptionalText(input.customerName);
+      const customer = customerName
+        ? await tx.customer.create({
+            data: {
+              name: customerName,
+            },
+          })
+        : null;
+
       const createdSale = await tx.sale.create({
         data: {
           invoiceNumber: createInvoiceNumber(),
           cashierId: cashier.id,
+          customerId: customer?.id,
           subtotal,
           totalAmount: subtotal,
           paidAmount,
           changeAmount: paidAmount - subtotal,
           paymentMethod,
           status: SaleStatus.COMPLETED,
+          notes: cleanOptionalText(input.notes),
           items: {
             create: saleItems.map((item) => ({
               productId: item.product.id,
@@ -177,6 +196,7 @@ export async function checkoutSale(input: CheckoutInput) {
       }
 
       return {
+        saleId: createdSale.id,
         invoiceNumber: createdSale.invoiceNumber,
         createdAt: createdSale.createdAt.toISOString(),
         paymentMethod: input.paymentMethod,
@@ -206,6 +226,172 @@ export async function checkoutSale(input: CheckoutInput) {
     const message =
       error instanceof Error ? error.message : "Transaksi gagal disimpan.";
 
+    return { ok: false, message };
+  }
+}
+
+export async function updateSaleNotes(input: { saleId: string; notes: string }) {
+  try {
+    await prisma.sale.update({
+      where: { id: input.saleId },
+      data: {
+        notes: cleanOptionalText(input.notes),
+      },
+    });
+
+    revalidatePath("/transactions");
+    revalidatePath(`/transactions/${input.saleId}`);
+
+    return { ok: true, message: "Catatan transaksi berhasil disimpan." };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Catatan gagal disimpan.";
+    return { ok: false, message };
+  }
+}
+
+export async function changeSaleStatus(input: {
+  saleId: string;
+  status: "VOIDED" | "REFUNDED";
+  notes: string;
+}) {
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const actor = await tx.user.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: "asc" },
+      });
+
+      if (!actor) {
+        throw new Error("User aktif belum tersedia.");
+      }
+
+      const sale = await tx.sale.findUnique({
+        where: { id: input.saleId },
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
+          },
+        },
+      });
+
+      if (!sale) {
+        throw new Error("Transaksi tidak ditemukan.");
+      }
+
+      if (sale.status !== SaleStatus.COMPLETED) {
+        throw new Error("Hanya transaksi selesai yang bisa diubah statusnya.");
+      }
+
+      const nextStatus =
+        input.status === "REFUNDED" ? SaleStatus.REFUNDED : SaleStatus.VOIDED;
+      const reason = cleanOptionalText(input.notes);
+
+      for (const item of sale.items) {
+        const beforeQuantity = Number(item.product.stockQuantity);
+        const quantity = Number(item.quantity);
+        const afterQuantity = beforeQuantity + quantity;
+
+        await tx.product.update({
+          where: { id: item.productId },
+          data: {
+            stockQuantity: {
+              increment: quantity,
+            },
+          },
+        });
+
+        await tx.stockMovement.create({
+          data: {
+            productId: item.productId,
+            type: StockMovementType.RETURN,
+            quantity,
+            beforeQuantity,
+            afterQuantity,
+            referenceType: nextStatus === SaleStatus.REFUNDED ? "refund" : "void",
+            referenceId: sale.id,
+            notes:
+              reason ??
+              `${nextStatus === SaleStatus.REFUNDED ? "Refund" : "Void"} ${
+                sale.invoiceNumber
+              }`,
+            createdBy: actor.id,
+          },
+        });
+      }
+
+      const updatedSale = await tx.sale.update({
+        where: { id: sale.id },
+        data: {
+          status: nextStatus,
+          notes: reason ?? sale.notes,
+        },
+      });
+
+      return updatedSale;
+    });
+
+    revalidatePath("/");
+    revalidatePath("/transactions");
+    revalidatePath(`/transactions/${input.saleId}`);
+
+    return {
+      ok: true,
+      message: `Transaksi ${result.invoiceNumber} berhasil diubah menjadi ${result.status}.`,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Status transaksi gagal diubah.";
+    return { ok: false, message };
+  }
+}
+
+export async function recordReceiptPrint(input: { saleId: string }) {
+  try {
+    const actor = await prisma.user.findFirst({
+      where: { isActive: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (!actor) {
+      throw new Error("User aktif belum tersedia.");
+    }
+
+    const existingPrint = await prisma.receiptPrint.findFirst({
+      where: {
+        saleId: input.saleId,
+        printedBy: actor.id,
+      },
+      orderBy: { printedAt: "desc" },
+    });
+
+    if (existingPrint) {
+      await prisma.receiptPrint.update({
+        where: { id: existingPrint.id },
+        data: {
+          printCount: {
+            increment: 1,
+          },
+        },
+      });
+    } else {
+      await prisma.receiptPrint.create({
+        data: {
+          saleId: input.saleId,
+          printedBy: actor.id,
+          printCount: 1,
+        },
+      });
+    }
+
+    revalidatePath(`/transactions/${input.saleId}`);
+
+    return { ok: true, message: "Print struk tercatat." };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Print struk gagal dicatat.";
     return { ok: false, message };
   }
 }

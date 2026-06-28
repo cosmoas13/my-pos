@@ -206,6 +206,10 @@ Typical workflow for checking stored transaction data:
 npm run db:studio
 ```
 
+## Feature Guides
+
+- [Transaction Flow](docs/TRANSACTIONS.md): checkout, riwayat transaksi, detail, print ulang struk, void, refund, catatan, customer, dan export CSV.
+
 ## Scripts
 
 | Command               | Function                                             | When to use                                                   |

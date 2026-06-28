@@ -23,7 +23,7 @@ import {
   Wheat,
 } from "lucide-react";
 
-import { checkoutSale } from "@/app/actions";
+import { checkoutSale, recordReceiptPrint } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 
 export type PosCategory = {
@@ -67,6 +67,7 @@ type ReceiptItem = {
 };
 
 type Receipt = {
+  saleId: string;
   invoiceNumber: string;
   createdAt: string;
   paymentMethod: PaymentMethod;
@@ -141,6 +142,8 @@ export function PosScreen({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paidAmount, setPaidAmount] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
   const [lastInvoice, setLastInvoice] = useState("");
   const [lastReceipt, setLastReceipt] = useState<Receipt | null>(null);
@@ -232,6 +235,8 @@ export function PosScreen({
       const result = await checkoutSale({
         paymentMethod,
         paidAmount: paymentMethod === "cash" ? paid : subtotal,
+        customerName,
+        notes,
         items: cart.map((item) => ({
           productId: item.id,
           quantity: item.quantity,
@@ -243,6 +248,8 @@ export function PosScreen({
       if (result.ok) {
         setCart([]);
         setPaidAmount("");
+        setCustomerName("");
+        setNotes("");
         setLastInvoice(result.invoiceNumber ?? "");
         setLastReceipt(result.receipt ?? null);
       }
@@ -255,7 +262,10 @@ export function PosScreen({
       return;
     }
 
-    window.print();
+    startTransition(async () => {
+      await recordReceiptPrint({ saleId: lastReceipt.saleId });
+      window.print();
+    });
   }
 
   return (
@@ -509,6 +519,32 @@ export function PosScreen({
                     </span>
                   </div>
                 </div>
+              </div>
+
+              <div className="mt-4 space-y-3 print:hidden">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium">
+                    Customer opsional
+                  </span>
+                  <input
+                    value={customerName}
+                    onChange={(event) => setCustomerName(event.target.value)}
+                    className="h-11 w-full rounded-lg border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]"
+                    placeholder="Nama customer"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium">
+                    Catatan opsional
+                  </span>
+                  <textarea
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    rows={2}
+                    className="w-full resize-none rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--primary)]"
+                    placeholder="Catatan transaksi"
+                  />
+                </label>
               </div>
 
               <div className="mt-5 grid grid-cols-2 gap-3 print:hidden">

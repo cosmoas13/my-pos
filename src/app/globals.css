@@ -49,3 +49,15 @@ select,
 textarea {
   font: inherit;
 }
+
+@media print {
+  html,
+  body {
+    min-height: 0;
+    background: #ffffff;
+  }
+
+  body {
+    color: #000000;
+  }
+}
